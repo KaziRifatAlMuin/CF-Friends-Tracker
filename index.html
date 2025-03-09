@@ -126,10 +126,10 @@
       // If no rating is available, return a default light color.
       if (!rating) return '#e0e0e0';
       if (rating < 1200) return 'gray';
-      if (rating < 1400) return 'green';
+      if (rating < 1400) return '#16bd13';
       if (rating < 1600) return 'cyan';
       if (rating < 1800) return '#427bf5';
-      if (rating < 2000) return 'purple';
+      if (rating < 2000) return '#e134eb';
       if (rating < 2300) return 'orange';
       return 'red';
     }
@@ -327,6 +327,8 @@
           // Submission Time
           const tdTime = document.createElement("td");
           tdTime.textContent = new Date(sub.creationTimeSeconds * 1000).toLocaleString();
+          tdTime.style.minWidth = "calc(4ch + 4px)";
+          tdTime.style.maxWidth = "calc(4ch + 4px)";
           tr.appendChild(tdTime);
           
           tbody.appendChild(tr);
