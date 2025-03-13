@@ -117,14 +117,11 @@
 
   <script>
     // Global variable to store user info.
-    // We'll store objects keyed by lower-case handle:
-    // { rating: number|null, display: originalHandle }
+    // Stored as objects keyed by lower-case handle: { rating: number|null, display: originalHandle }
     let userRatingMap = {};
 
     // Returns a color based on rating.
-    // Mapping adjusted to cover all ranges.
     function getRatingColor(rating) {
-      // If no rating is available, return a default light color.
       if (!rating) return '#e0e0e0';
       if (rating < 1200) return 'gray';
       if (rating < 1400) return '#16bd13';
@@ -170,8 +167,7 @@
       }
     }
 
-    // Fetch current user info (to get current rating) for given handles.
-    // If more than 10 handles are provided, split into chunks.
+    // Fetch current user info for given handles.
     async function fetchUserInfo(handles) {
       const mapping = {};
       const chunkSize = 10;
@@ -179,7 +175,6 @@
       for (let i = 0; i < handles.length; i += chunkSize) {
         chunks.push(handles.slice(i, i + chunkSize));
       }
-      // Fetch each chunk concurrently.
       const results = await Promise.all(chunks.map(async chunk => {
         try {
           const response = await fetch(`https://codeforces.com/api/user.info?handles=${chunk.join(';')}`);
@@ -204,10 +199,11 @@
       return mapping;
     }
 
-    // Group submissions by problem (contestId-index) and return the latest submission per problem.
+    // Group submissions by problem and return the latest submission per problem.
     function processSubmissionsForUser(submissions, handle) {
       const map = {};
       submissions.forEach(sub => {
+        if (!sub.problem.contestId || !sub.problem.index) return; // skip invalid problems
         const key = `${sub.problem.contestId}-${sub.problem.index}`;
         if (!map[key] || sub.creationTimeSeconds > map[key].creationTimeSeconds) {
           map[key] = sub;
@@ -217,12 +213,9 @@
     }
 
     // Compute stats for a given set of submissions and period (in seconds).
-    // Only include problems with a rating when computing the average.
-    // Returns { totalSubmissions, totalSolved, avgRating, score }
     function computeStats(submissions, periodSeconds) {
       const nowSec = Math.floor(Date.now() / 1000);
       const filtered = submissions.filter(sub => sub.creationTimeSeconds >= (nowSec - periodSeconds));
-      // Group by problem key.
       const problemMap = {};
       filtered.forEach(sub => {
         const key = `${sub.problem.contestId}-${sub.problem.index}`;
@@ -249,6 +242,34 @@
       return { totalSubmissions, totalSolved, avgRating, score };
     }
 
+    // Process handles with a concurrency limit.
+    async function processHandles(handles, concurrencyLimit, period10, period60) {
+      const userStats = {};
+      let allSubmissions = [];
+      let index = 0;
+
+      async function worker() {
+        while (index < handles.length) {
+          const currentIndex = index;
+          index++;
+          const handle = handles[currentIndex];
+          const submissions = await fetchUserSubmissions(handle);
+          const processed = processSubmissionsForUser(submissions, handle);
+          allSubmissions = allSubmissions.concat(processed);
+          const stats10 = computeStats(processed, period10);
+          const stats60 = computeStats(processed, period60);
+          userStats[handle.toLowerCase()] = { period10: stats10, period60: stats60 };
+        }
+      }
+
+      const workers = [];
+      for (let i = 0; i < concurrencyLimit; i++) {
+        workers.push(worker());
+      }
+      await Promise.all(workers);
+      return { userStats, allSubmissions };
+    }
+
     // Main function: fetch data for all handles, compute ranking stats and display submission history.
     async function fetchAndDisplay() {
       document.getElementById("loading").style.display = "block";
@@ -257,32 +278,23 @@
       
       const handlesInput = document.getElementById("handles").value;
       const handles = handlesInput.split(",").map(h => h.trim()).filter(h => h !== "");
-      
-      // First, fetch current user info to get their ratings and display names.
+      if (handles.length === 0) {
+        alert("Please enter at least one Codeforces handle.");
+        document.getElementById("loading").style.display = "none";
+        return;
+      }
+
+      // Fetch current user info.
       userRatingMap = await fetchUserInfo(handles);
       
       const period10 = 10 * 24 * 60 * 60; // 10 days in seconds
       const period60 = 60 * 24 * 60 * 60; // 60 days in seconds
       
-      const userStats = {};    // To hold stats for each friend.
-      let allSubmissions = []; // For submission history.
+      // Process each handle with limited concurrency.
+      const concurrencyLimit = 5; // Adjust this number as needed.
+      const { userStats, allSubmissions } = await processHandles(handles, concurrencyLimit, period10, period60);
       
-      // Process each friend concurrently.
-      const promises = handles.map(async handle => {
-        const submissions = await fetchUserSubmissions(handle);
-        // Process submissions to get the latest per problem.
-        const processed = processSubmissionsForUser(submissions, handle);
-        // Accumulate submissions for the Submission History table.
-        allSubmissions = allSubmissions.concat(processed);
-        // Compute stats for both periods.
-        const stats10 = computeStats(processed, period10);
-        const stats60 = computeStats(processed, period60);
-        userStats[handle.toLowerCase()] = { period10: stats10, period60: stats60 };
-      });
-      
-      await Promise.all(promises);
-      
-      // Sort submissions by submission time (latest on top) for the Submission History.
+      // Sort submissions by submission time (latest on top) for Submission History.
       allSubmissions.sort((a, b) => b.creationTimeSeconds - a.creationTimeSeconds);
       displaySubmissionHistory(allSubmissions);
       displayRanking(userStats);
@@ -298,7 +310,7 @@
       } else {
         submissions.forEach(sub => {
           const tr = document.createElement("tr");
-          // Handle (clickable and colored according to user's current rating)
+          // Handle (clickable and colored based on current rating)
           const tdHandle = document.createElement("td");
           const userInfo = userRatingMap[sub.handle.toLowerCase()] || { rating: null, display: sub.handle };
           const userColor = getRatingColor(userInfo.rating);
@@ -340,7 +352,6 @@
 
     // Display the Friends Ranking table.
     function displayRanking(userStats) {
-      // Create an array of objects for each friend with computed stats.
       const rankingData = [];
       for (const handle in userStats) {
         const stats10 = userStats[handle].period10;
@@ -366,54 +377,46 @@
         tbody.innerHTML = "<tr><td colspan='10'>No ranking data available.</td></tr>";
       } else {
         rankingData.forEach((data, index) => {
-            const tr = document.createElement("tr");
-            // Rank
-            const tdRank = document.createElement("td");
-            tdRank.textContent = index + 1;
-            tr.appendChild(tdRank);
-            // Handle (clickable and colored)
-            const tdHandle = document.createElement("td");
-            const userInfo = userRatingMap[data.handle.toLowerCase()] || { rating: null, display: data.handle };
-            const userColor = getRatingColor(userInfo.rating);
-            tdHandle.innerHTML = `<a href="https://codeforces.com/profile/${userInfo.display}" target="_blank" style="color: ${userColor}; text-decoration: none;">${userInfo.display}</a>`;
-            tr.appendChild(tdHandle);
-            // Last 10 Days stats
-            const tdSolved10 = document.createElement("td");
-            tdSolved10.textContent = data.totalSolved10;
-            tr.appendChild(tdSolved10);
-
-            const tdAvg10 = document.createElement("td");
-            tdAvg10.textContent = data.avgRating10;
-            tdAvg10.style.color = getRatingColor(parseFloat(data.avgRating10));
-            tr.appendChild(tdAvg10);
-
-            const tdSubs10 = document.createElement("td");
-            tdSubs10.textContent = data.totalSubs10;
-            tr.appendChild(tdSubs10);
-
-            const tdScore10 = document.createElement("td");
-            tdScore10.textContent = data.score10;
-            tr.appendChild(tdScore10);
-
-            // Last 60 Days stats
-            const tdSolved60 = document.createElement("td");
-            tdSolved60.textContent = data.totalSolved60;
-            tr.appendChild(tdSolved60);
-
-            const tdAvg60 = document.createElement("td");
-            tdAvg60.textContent = data.avgRating60;
-            tdAvg60.style.color = getRatingColor(parseFloat(data.avgRating60));
-            tr.appendChild(tdAvg60);
-
-            const tdSubs60 = document.createElement("td");
-            tdSubs60.textContent = data.totalSubs60;
-            tr.appendChild(tdSubs60);
-
-            const tdScore60 = document.createElement("td");
-            tdScore60.textContent = data.score60;
-            tr.appendChild(tdScore60);
-
-            tbody.appendChild(tr);
+          const tr = document.createElement("tr");
+          // Rank
+          const tdRank = document.createElement("td");
+          tdRank.textContent = index + 1;
+          tr.appendChild(tdRank);
+          // Handle (clickable and colored)
+          const tdHandle = document.createElement("td");
+          const userInfo = userRatingMap[data.handle.toLowerCase()] || { rating: null, display: data.handle };
+          const userColor = getRatingColor(userInfo.rating);
+          tdHandle.innerHTML = `<a href="https://codeforces.com/profile/${userInfo.display}" target="_blank" style="color: ${userColor}; text-decoration: none;">${userInfo.display}</a>`;
+          tr.appendChild(tdHandle);
+          // Last 10 Days stats
+          const tdSolved10 = document.createElement("td");
+          tdSolved10.textContent = data.totalSolved10;
+          tr.appendChild(tdSolved10);
+          const tdAvg10 = document.createElement("td");
+          tdAvg10.textContent = data.avgRating10;
+          tdAvg10.style.color = getRatingColor(parseFloat(data.avgRating10));
+          tr.appendChild(tdAvg10);
+          const tdSubs10 = document.createElement("td");
+          tdSubs10.textContent = data.totalSubs10;
+          tr.appendChild(tdSubs10);
+          const tdScore10 = document.createElement("td");
+          tdScore10.textContent = data.score10;
+          tr.appendChild(tdScore10);
+          // Last 60 Days stats
+          const tdSolved60 = document.createElement("td");
+          tdSolved60.textContent = data.totalSolved60;
+          tr.appendChild(tdSolved60);
+          const tdAvg60 = document.createElement("td");
+          tdAvg60.textContent = data.avgRating60;
+          tdAvg60.style.color = getRatingColor(parseFloat(data.avgRating60));
+          tr.appendChild(tdAvg60);
+          const tdSubs60 = document.createElement("td");
+          tdSubs60.textContent = data.totalSubs60;
+          tr.appendChild(tdSubs60);
+          const tdScore60 = document.createElement("td");
+          tdScore60.textContent = data.score60;
+          tr.appendChild(tdScore60);
+          tbody.appendChild(tr);
         });
       }
       document.getElementById("rankingTable").style.display = "table";
