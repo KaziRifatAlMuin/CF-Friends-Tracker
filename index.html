@@ -40,11 +40,26 @@
       cursor: pointer;
     }
     button:hover { background: #0056b3; }
+    
+    /* Spinner Loading Animation */
     #loading {
       text-align: center;
-      font-size: 18px;
-      margin: 10px;
+      margin: 20px auto;
     }
+    .spinner {
+      margin: 0 auto;
+      border: 8px solid #f3f3f3;
+      border-top: 8px solid #007bff;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
     table {
       width: 100%;
       border-collapse: collapse;
@@ -69,10 +84,15 @@
     <input type="text" id="handles" placeholder="tourist, Radewoosh, user3">
     <button onclick="fetchAndDisplay()">Fetch Data</button>
   </div>
-  <div id="loading" style="display:none;">Loading data...</div>
   
-  <!-- Friends Ranking Section -->
-  <div class="section">
+  <!-- Loading Animation -->
+  <div id="loading" style="display:none;">
+    <div class="spinner"></div>
+    <p>Loading data...</p>
+  </div>
+  
+  <!-- Friends Ranking Section (hidden until data loads) -->
+  <div id="rankingSection" class="section" style="display:none;">
     <h2>Friends Ranking</h2>
     <table id="rankingTable" style="display:none;">
       <thead>
@@ -97,8 +117,8 @@
     </table>
   </div>
   
-  <!-- Submission History Section -->
-  <div class="section">
+  <!-- Submission History Section (hidden until data loads) -->
+  <div id="submissionSection" class="section" style="display:none;">
     <h2>Submission History</h2>
     <table id="solvedTable" style="display:none;">
       <thead>
@@ -117,7 +137,6 @@
 
   <script>
     // Global variable to store user info.
-    // Stored as objects keyed by lower-case handle: { rating: number|null, display: originalHandle }
     let userRatingMap = {};
 
     // Returns a color based on rating.
@@ -203,7 +222,7 @@
     function processSubmissionsForUser(submissions, handle) {
       const map = {};
       submissions.forEach(sub => {
-        if (!sub.problem.contestId || !sub.problem.index) return; // skip invalid problems
+        if (!sub.problem.contestId || !sub.problem.index) return;
         const key = `${sub.problem.contestId}-${sub.problem.index}`;
         if (!map[key] || sub.creationTimeSeconds > map[key].creationTimeSeconds) {
           map[key] = sub;
@@ -273,6 +292,9 @@
     // Main function: fetch data for all handles, compute ranking stats and display submission history.
     async function fetchAndDisplay() {
       document.getElementById("loading").style.display = "block";
+      // Hide sections while loading
+      document.getElementById("rankingSection").style.display = "none";
+      document.getElementById("submissionSection").style.display = "none";
       document.getElementById("rankingTable").style.display = "none";
       document.getElementById("solvedTable").style.display = "none";
       
@@ -287,18 +309,22 @@
       // Fetch current user info.
       userRatingMap = await fetchUserInfo(handles);
       
-      const period10 = 10 * 24 * 60 * 60; // 10 days in seconds
-      const period60 = 60 * 24 * 60 * 60; // 60 days in seconds
+      const period10 = 10 * 24 * 60 * 60;
+      const period60 = 60 * 24 * 60 * 60;
       
       // Process each handle with limited concurrency.
-      const concurrencyLimit = 5; // Adjust this number as needed.
+      const concurrencyLimit = 5;
       const { userStats, allSubmissions } = await processHandles(handles, concurrencyLimit, period10, period60);
       
-      // Sort submissions by submission time (latest on top) for Submission History.
+      // Sort submissions by submission time (latest first)
       allSubmissions.sort((a, b) => b.creationTimeSeconds - a.creationTimeSeconds);
       displaySubmissionHistory(allSubmissions);
       displayRanking(userStats);
+      
       document.getElementById("loading").style.display = "none";
+      // Show sections after data is loaded
+      document.getElementById("rankingSection").style.display = "block";
+      document.getElementById("submissionSection").style.display = "block";
     }
 
     // Display the Submission History table.
@@ -310,33 +336,46 @@
       } else {
         submissions.forEach(sub => {
           const tr = document.createElement("tr");
+          
           // Handle (clickable and colored based on current rating)
           const tdHandle = document.createElement("td");
           const userInfo = userRatingMap[sub.handle.toLowerCase()] || { rating: null, display: sub.handle };
           const userColor = getRatingColor(userInfo.rating);
           tdHandle.innerHTML = `<a href="https://codeforces.com/profile/${userInfo.display}" target="_blank" style="color: ${userColor}; text-decoration: none;">${userInfo.display}</a>`;
           tr.appendChild(tdHandle);
+          
           // Problem (clickable with colored text)
           const tdProblem = document.createElement("td");
-          const a = document.createElement("a");
-          a.href = `https://codeforces.com/contest/${sub.problem.contestId}/problem/${sub.problem.index}`;
-          a.target = "_blank";
-          a.textContent = `${sub.problem.contestId}-${sub.problem.index}: ${sub.problem.name}`;
-          a.style.color = getRatingColor(sub.problem.rating);
-          tdProblem.appendChild(a);
+          const problemLink = document.createElement("a");
+          problemLink.href = `https://codeforces.com/contest/${sub.problem.contestId}/problem/${sub.problem.index}`;
+          problemLink.target = "_blank";
+          problemLink.textContent = `${sub.problem.contestId}-${sub.problem.index}: ${sub.problem.name}`;
+          problemLink.style.color = getRatingColor(sub.problem.rating);
+          tdProblem.appendChild(problemLink);
           tr.appendChild(tdProblem);
-          // Verdict
+          
+          // Verdict (clickable linking to the solution)
           const tdVerdict = document.createElement("td");
-          tdVerdict.textContent = getFriendlyVerdict(sub);
+          const verdictLink = document.createElement("a");
+          verdictLink.href = `https://codeforces.com/contest/${sub.problem.contestId}/submission/${sub.id}`;
+          verdictLink.target = "_blank";
+          const verdictText = getFriendlyVerdict(sub);
+          verdictLink.textContent = verdictText;
+          // Light green if accepted; otherwise red.
+          verdictLink.style.color = (verdictText === "Accepted") ? "lightgreen" : "red";
+          tdVerdict.appendChild(verdictLink);
           tr.appendChild(tdVerdict);
+          
           // Rating
           const tdRating = document.createElement("td");
           tdRating.textContent = sub.problem.rating ? sub.problem.rating : "N/A";
           tr.appendChild(tdRating);
+          
           // Tags
           const tdTags = document.createElement("td");
           tdTags.textContent = (sub.problem.tags && sub.problem.tags.length > 0) ? sub.problem.tags.join(", ") : "N/A";
           tr.appendChild(tdTags);
+          
           // Submission Time
           const tdTime = document.createElement("td");
           tdTime.textContent = new Date(sub.creationTimeSeconds * 1000).toLocaleString();
@@ -368,7 +407,6 @@
           score60: stats60.score
         });
       }
-      // Sort by the Last 10 Days score (Total Solved × Avg Rating) in descending order.
       rankingData.sort((a, b) => b.score10 - a.score10);
       
       const tbody = document.getElementById("rankingTableBody");
