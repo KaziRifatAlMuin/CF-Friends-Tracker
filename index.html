@@ -82,7 +82,7 @@
   <div class="input-container">
     <label for="handles">Enter Codeforces Handles (comma separated): </label>
     <input type="text" id="handles" placeholder="tourist, Radewoosh, user3">
-    <button onclick="fetchAndDisplay()">Fetch Data</button>
+    <button onclick="fetchAndDisplay()"> Load </button>
   </div>
   
   <!-- Loading Animation -->
@@ -232,22 +232,20 @@
     }
 
     // Compute stats for a given set of submissions and period (in seconds).
-    function computeStats(submissions, periodSeconds) {
+    // totalSubmissions now counts all submissions including multiples per problem.
+    function computeStats(fullSubmissions, periodSeconds, uniqueSubmissions) {
       const nowSec = Math.floor(Date.now() / 1000);
-      const filtered = submissions.filter(sub => sub.creationTimeSeconds >= (nowSec - periodSeconds));
-      const problemMap = {};
-      filtered.forEach(sub => {
-        const key = `${sub.problem.contestId}-${sub.problem.index}`;
-        if (!problemMap[key] || sub.creationTimeSeconds > problemMap[key].creationTimeSeconds) {
-          problemMap[key] = sub;
-        }
-      });
-      const totalSubmissions = Object.keys(problemMap).length;
+      // Filter full submissions list for total count
+      const filteredFull = fullSubmissions.filter(sub => sub.creationTimeSeconds >= (nowSec - periodSeconds));
+      // Filter deduplicated submissions for solved count and rating
+      const filteredUnique = uniqueSubmissions.filter(sub => sub.creationTimeSeconds >= (nowSec - periodSeconds));
+      
+      const totalSubmissions = filteredFull.length;
       let totalSolved = 0;
       let ratingSum = 0;
       let ratedSolvedCount = 0;
-      for (let key in problemMap) {
-        const sub = problemMap[key];
+      
+      filteredUnique.forEach(sub => {
         if (sub.verdict === "OK") {
           totalSolved++;
           if (sub.problem.rating) {
@@ -255,9 +253,11 @@
             ratedSolvedCount++;
           }
         }
-      }
+      });
+      
       const avgRating = ratedSolvedCount > 0 ? (ratingSum / ratedSolvedCount).toFixed(2) : "0";
       const score = (totalSolved * parseFloat(avgRating)).toFixed(2);
+      
       return { totalSubmissions, totalSolved, avgRating, score };
     }
 
@@ -275,8 +275,8 @@
           const submissions = await fetchUserSubmissions(handle);
           const processed = processSubmissionsForUser(submissions, handle);
           allSubmissions = allSubmissions.concat(processed);
-          const stats10 = computeStats(processed, period10);
-          const stats60 = computeStats(processed, period60);
+          const stats10 = computeStats(submissions, period10, processed);
+          const stats60 = computeStats(submissions, period60, processed);
           userStats[handle.toLowerCase()] = { period10: stats10, period60: stats60 };
         }
       }
