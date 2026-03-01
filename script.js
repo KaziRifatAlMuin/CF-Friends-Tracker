@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTheme();
   buildHandleTable();
   loadHandlesFromStorage();
+  loadShowTagsSetting();
+  const st = document.getElementById('showTagsSwitch'); if (st) st.addEventListener('change', saveShowTagsSetting);
   if (getSavedHandles().some(Boolean)) fetchAndDisplay();
 });
 
@@ -77,6 +79,29 @@ function saveHandles() {
 }
 
 function saveAndLoad() { saveHandles(); fetchAndDisplay(); }
+
+// ── Show Tags Toggle (settings) ─────────────────────────
+function loadShowTagsSetting() {
+  try {
+    const raw = localStorage.getItem('cf_show_tags');
+    const visible = raw === 'true';
+    const el = document.getElementById('showTagsSwitch');
+    if (el) el.checked = visible;
+    applyShowTags(visible);
+  } catch { /* ignore */ }
+}
+
+function saveShowTagsSetting() {
+  const el = document.getElementById('showTagsSwitch');
+  const v = !!(el && el.checked);
+  try { localStorage.setItem('cf_show_tags', v ? 'true' : 'false'); } catch(e) {}
+  applyShowTags(v);
+}
+
+function applyShowTags(visible) {
+  document.querySelectorAll('.tags-col').forEach(th => { th.style.display = visible ? '' : 'none'; });
+  document.querySelectorAll('.tags-cell').forEach(td => { td.style.display = visible ? '' : 'none'; });
+}
 
 // ── Cache ─────────────────────────────────────────────────
 function readCache() {
@@ -699,6 +724,8 @@ function renderSubmissions() {
 
   tbody.innerHTML = '';
   tbody.appendChild(frag);
+  const showTags = localStorage.getItem('cf_show_tags') === 'true';
+  applyShowTags(showTags);
   renderPagination();
 }
 
@@ -789,15 +816,25 @@ function setStatus(msg) {
 function applyTheme() {
   const saved = localStorage.getItem('cf_theme') || 'dark';
   document.body.classList.toggle('light-mode', saved === 'light');
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = saved === 'light' ? 'Dark Mode' : 'Light Mode';
+  const sw = document.getElementById('themeToggleSwitch');
+  if (sw) sw.checked = saved === 'light';
+  const lbl = document.getElementById('themeToggleLabel');
+  if (lbl) lbl.textContent = saved === 'light' ? 'Dark Mode' : 'Light Mode';
 }
 
 function toggleTheme() {
   const isLight = document.body.classList.toggle('light-mode');
   localStorage.setItem('cf_theme', isLight ? 'light' : 'dark');
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = isLight ? 'Dark Mode' : 'Light Mode';
+  const lbl = document.getElementById('themeToggleLabel');
+  if (lbl) lbl.textContent = isLight ? 'Dark Mode' : 'Light Mode';
+  if (Object.keys(lastUserStats).length) renderAllCharts(lastUserStats);
+}
+
+function toggleThemeFromSwitch() {
+  const sw = document.getElementById('themeToggleSwitch');
+  const isLight = !!(sw && sw.checked);
+  localStorage.setItem('cf_theme', isLight ? 'light' : 'dark');
+  applyTheme();
   if (Object.keys(lastUserStats).length) renderAllCharts(lastUserStats);
 }
 

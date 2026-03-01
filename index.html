@@ -15,7 +15,13 @@
 </head>
 <body>
 <h1>Codeforces Friends Tracker</h1>
-<button id="themeToggle" onclick="toggleTheme()">Light Mode</button>
+<label id="themeToggleWrap" class="switch" style="position:fixed;top:14px;right:18px;z-index:200;">
+  <span class="switch-control">
+    <input id="themeToggleSwitch" type="checkbox" onchange="toggleThemeFromSwitch()">
+    <span class="switch-track"><span class="switch-thumb"></span></span>
+  </span>
+  <span class="switch-label switch-small" id="themeToggleLabel">Light Mode</span>
+</label>
 
 <!-- ── Settings Panel ────────────────────────────── -->
 <details id="settingsPanel" class="settings-panel">
@@ -40,6 +46,7 @@
       <button onclick="saveHandles()" class="btn-secondary">Save only</button>
       <button onclick="clearCache()" class="btn-danger">Clear cache</button>
     </div>
+    
     <button id="refreshBtn" onclick="fetchAndDisplay()">Refresh data</button>
     </details>
     
@@ -100,7 +107,7 @@
   
   <!-- ── Friends Ranking ────────────────────────────── -->
   <div id="rankingSection" class="section" style="display:none">
-    <h2>Friends Ranking <small style="font-size:0.75rem;color:#78909c">(sorted by Score — Last 60 Days)</small></h2>
+    <h2>Friends Ranking</h2>
     <div class="table-wrapper">
       <table class="data-table" id="rankingTable">
         <thead>
@@ -128,6 +135,15 @@
   <div id="submissionSection" class="section" style="display:none">
     <h2>Submission History</h2>
     <div id="paginationTop" class="pagination-controls"></div>
+    <div style="margin-top:10px">
+      <label class="switch">
+        <span class="switch-control">
+          <input id="showTagsSwitch" type="checkbox">
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </span>
+        <span class="switch-label switch-small">Show Tags</span>
+      </label>
+    </div>
     <div class="table-wrapper">
       <table class="data-table" id="solvedTable">
         <thead>
@@ -137,7 +153,7 @@
             <th>Problem</th>
             <th>Verdict</th>
             <th>Rating</th>
-            <th>Tags</th>
+            <th class="tags-col">Tags</th>
             <th>Time</th>
             </tr>
             </thead>
