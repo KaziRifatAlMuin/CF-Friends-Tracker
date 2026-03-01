@@ -14,11 +14,12 @@
   <script src="script.js" defer></script>
 </head>
 <body>
-<h1>&#x1F3C6; Codeforces Friends Tracker</h1>
+<h1>Codeforces Friends Tracker</h1>
+<button id="themeToggle" onclick="toggleTheme()">Light Mode</button>
 
 <!-- ── Settings Panel ────────────────────────────── -->
 <details id="settingsPanel" class="settings-panel">
-  <summary>&#x2699;&#xFE0F; Handle Settings — up to 15 users</summary>
+  <summary>Handle Settings — up to 15 users</summary>
 
   <div class="table-wrapper" style="margin-top:12px">
     <table class="handles-table">
@@ -35,11 +36,11 @@
   </div>
 
     <div class="settings-actions">
-      <button onclick="saveAndLoad()">&#x1F4BE; Save &amp; Load</button>
-      <button onclick="saveHandles()" class="btn-secondary">&#x1F4CB; Save only</button>
-      <button onclick="clearCache()" class="btn-danger">&#x1F5D1; Clear cache</button>
+      <button onclick="saveAndLoad()">Save & Load</button>
+      <button onclick="saveHandles()" class="btn-secondary">Save only</button>
+      <button onclick="clearCache()" class="btn-danger">Clear cache</button>
     </div>
-    <button id="refreshBtn" onclick="fetchAndDisplay()">&#x1F504; Refresh data</button>
+    <button id="refreshBtn" onclick="fetchAndDisplay()">Refresh data</button>
     </details>
     
     <!-- ── Status bar ─────────────────────────────────── -->
@@ -49,38 +50,74 @@
     <div id="loading" style="display:none">
     <div class="spinner"></div>
     <p id="loadingMsg">Loading…</p>
+    <div class="progress-wrap">
+      <div id="progressBar" class="progress-bar">0%</div>
+    </div>
+    <p id="progressText" class="progress-text"></p>
   </div>
 
-  <!-- ── Performance Chart ──────────────────────────── -->
-  <div id="chartSection" class="section" style="display:none">
-    <h2>&#x1F4CA; Performance Overview</h2>
-    <div class="chart-container">
-      <canvas id="performanceChart"></canvas>
+  <!-- ── Stat Cards ─────────────────────────────────── -->
+  <div id="statCardsSection" class="section" style="display:none">
+    <div id="statCardsContainer" class="stat-cards-grid"></div>
+  </div>
+  
+  <!-- ── Charts ────────────────────────────────────────── -->
+  <div id="chartSection" class="section">
+    <h2 class="section-toggle" onclick="togglePerformance()">Performance Overview</h2>
+    <div class="charts-grid" style="display:none">
+      <div class="chart-box" id="chartBox1">
+        <div class="chart-header">
+          <span class="chart-header-title">Solved Count &amp; Score</span>
+          <button class="chart-toggle-btn" onclick="toggleChart('chartBox1')">Hide</button>
+        </div>
+        <div class="chart-body">
+          <canvas id="chart1"></canvas>
+        </div>
+      </div>
+      <div class="chart-box" id="chartBox2">
+        <div class="chart-header">
+          <span class="chart-header-title">Avg Problem Rating</span>
+          <button class="chart-toggle-btn" onclick="toggleChart('chartBox2')">Hide</button>
+        </div>
+        <div class="chart-body">
+          <canvas id="chart2"></canvas>
+        </div>
+      </div>
+      <div class="chart-box chart-box--wide" id="chartBox3">
+        <div class="chart-header">
+          <span class="chart-header-title">Skill Curve by Rating Tier</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="curveToggleBtn" class="chart-toggle-btn" onclick="toggleAllCurves()">Hide Curves</button>
+            <button class="chart-toggle-btn" onclick="toggleChart('chartBox3')">Hide</button>
+          </div>
+        </div>
+        <div class="chart-body">
+          <canvas id="chart3"></canvas>
+        </div>
+      </div>
     </div>
   </div>
   
   <!-- ── Friends Ranking ────────────────────────────── -->
   <div id="rankingSection" class="section" style="display:none">
-    <h2>&#x1F4CB; Friends Ranking</h2>
+    <h2>Friends Ranking <small style="font-size:0.75rem;color:#78909c">(sorted by Score — Last 60 Days)</small></h2>
     <div class="table-wrapper">
       <table class="data-table" id="rankingTable">
         <thead>
           <tr>
             <th rowspan="2">Rank</th>
             <th rowspan="2">Handle</th>
-            <th colspan="4">Last 10 Days</th>
-            <th colspan="4">Last 60 Days</th>
+            <th colspan="3">Last 10 Days</th>
+            <th colspan="3">Last 60 Days</th>
           </tr>
           <tr>
             <th class="sub-header">Solved</th>
             <th class="sub-header">Avg Rating</th>
             <th class="sub-header">Submissions</th>
-            <th class="sub-header">Score</th>
             <th class="sub-header">Solved</th>
             <th class="sub-header">Avg Rating</th>
             <th class="sub-header">Submissions</th>
-            <th class="sub-header">Score</th>
-            </tr>
+          </tr>
             </thead>
             <tbody id="rankingTableBody"></tbody>
             </table>
@@ -89,7 +126,7 @@
 
   <!-- ── Submission History ─────────────────────────── -->
   <div id="submissionSection" class="section" style="display:none">
-    <h2>&#x1F4DC; Submission History</h2>
+    <h2>Submission History</h2>
     <div id="paginationTop" class="pagination-controls"></div>
     <div class="table-wrapper">
       <table class="data-table" id="solvedTable">
