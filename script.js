@@ -30,7 +30,10 @@ document.addEventListener('DOMContentLoaded', () => {
   buildHandleTable();
   loadHandlesFromStorage();
   loadShowTagsSetting();
+  loadExactTimeSetting();
   const st = document.getElementById('showTagsSwitch'); if (st) st.addEventListener('change', saveShowTagsSetting);
+  const rt = document.getElementById('relativeTimeSwitch'); if (rt) rt.addEventListener('change', saveExactTimeSetting);
+  startRelativeTimer();
   if (getSavedHandles().some(Boolean)) fetchAndDisplay();
 });
 
@@ -101,6 +104,64 @@ function saveShowTagsSetting() {
 function applyShowTags(visible) {
   document.querySelectorAll('.tags-col').forEach(th => { th.style.display = visible ? '' : 'none'; });
   document.querySelectorAll('.tags-cell').forEach(td => { td.style.display = visible ? '' : 'none'; });
+}
+
+// ── Relative Time Toggle ─────────────────────────────────
+function loadExactTimeSetting() {
+  try {
+    const raw = localStorage.getItem('cf_exact_time');
+    // Default to OFF (show relative) when no setting exists
+    const exactEnabled = raw === null ? false : raw === 'true';
+    const el = document.getElementById('relativeTimeSwitch');
+    if (el) el.checked = exactEnabled;
+    applyExactTime(exactEnabled);
+    // Persist the default so behavior is consistent across reloads
+    if (raw === null) try { localStorage.setItem('cf_exact_time', exactEnabled ? 'true' : 'false'); } catch(e) {}
+    return exactEnabled;
+  } catch { return false; }
+}
+
+function saveExactTimeSetting() {
+  const el = document.getElementById('relativeTimeSwitch');
+  const v = !!(el && el.checked); // checked => show exact
+  try { localStorage.setItem('cf_exact_time', v ? 'true' : 'false'); } catch(e) {}
+  applyExactTime(v);
+}
+
+function applyExactTime(exactEnabled) {
+  document.querySelectorAll('.time-cell').forEach(td => {
+    const ts = Number(td.dataset.ts);
+    const exact = td.title || new Date(ts * 1000).toLocaleString();
+    td.textContent = exactEnabled ? exact : formatRelativeTime(ts);
+  });
+}
+
+let relativeTimeTimer = null;
+function startRelativeTimer() {
+  if (relativeTimeTimer) return;
+  relativeTimeTimer = setInterval(() => {
+    // update only when showing relative times
+    if (localStorage.getItem('cf_exact_time') !== 'true') applyExactTime(false);
+  }, 10000);
+}
+
+function formatRelativeTime(tsSeconds) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  let delta = nowSec - Math.floor(tsSeconds);
+  const past = delta >= 0;
+  delta = Math.abs(delta);
+  const units = [[86400, 'd'], [3600, 'h'], [60, 'm'], [1, 's']];
+  const parts = [];
+  for (const [sec, abbr] of units) {
+    if (delta >= sec) {
+      const val = Math.floor(delta / sec);
+      parts.push(val + abbr);
+      delta -= val * sec;
+    }
+    if (parts.length === 2) break;
+  }
+  if (parts.length === 0) parts.push('0s');
+  return past ? parts.join(' ') + ' ago' : 'in ' + parts.join(' ');
 }
 
 // ── Cache ─────────────────────────────────────────────────
@@ -703,7 +764,8 @@ function renderSubmissions() {
     const vText  = verdictText(sub);
     const vColor = vText === 'Accepted' ? '#66bb6a' : '#ef5350';
     const tags   = sub.problem.tags?.join(', ') || '—';
-    const time   = new Date(sub.creationTimeSeconds * 1000).toLocaleString();
+    const tsMs   = sub.creationTimeSeconds * 1000;
+    const timeExact = new Date(tsMs).toLocaleString();
     const tr     = document.createElement('tr');
     const selfHandle = getActiveHandles()[0]?.toLowerCase() || '';
     if (sub.handle?.toLowerCase() === selfHandle) tr.classList.add('self-row');
@@ -718,7 +780,7 @@ function renderSubmissions() {
              target="_blank" style="color:${vColor}">${vText}</a></td>
       <td style="color:${pColor}">${sub.problem.rating || '—'}</td>
       <td class="tags-cell">${esc(tags)}</td>
-      <td class="time-cell">${time}</td>`;
+      <td class="time-cell" data-ts="${sub.creationTimeSeconds}" title="${esc(timeExact)}">${esc(timeExact)}</td>`;
     frag.appendChild(tr);
   });
 
@@ -726,6 +788,8 @@ function renderSubmissions() {
   tbody.appendChild(frag);
   const showTags = localStorage.getItem('cf_show_tags') === 'true';
   applyShowTags(showTags);
+  const exact = localStorage.getItem('cf_exact_time') === 'true';
+  applyExactTime(exact);
   renderPagination();
 }
 
